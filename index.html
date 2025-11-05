@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera-Based Blink Error Calculator (ROI)</title>
+    <title>Camera-Based Blink Error Calculator (Targeted ROI)</title>
     
     <style>
         body { 
@@ -28,7 +28,7 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             display: inline-block;
             background-color: #fff;
-            position: relative; /* Needed for positioning the ROI guide */
+            position: relative; /* Essential for positioning the ROI guide */
         }
         video { display: none; }
         canvas { 
@@ -42,11 +42,11 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%); /* Centers the div */
-            border: 2px dashed rgba(255, 0, 0, 0.7); /* Red dashed border */
-            background-color: rgba(255, 0, 0, 0.05); /* Very light red overlay */
-            pointer-events: none; /* Allows clicks to pass through to canvas if needed */
-            z-index: 10; /* Ensure it's above the canvas */
-            box-sizing: border-box; /* Include padding/border in element's total width/height */
+            border: 2px dashed rgba(255, 0, 0, 0.9); /* Clear Red dashed border */
+            background-color: rgba(255, 0, 0, 0.1); /* Light red overlay */
+            pointer-events: none; 
+            z-index: 10; 
+            box-sizing: border-box; 
         }
 
         /* --- Input/Result Styles --- */
@@ -100,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔴 Camera Blink Error Calculator (ROI)</h1>
+        <h1>🎯 Camera Blink Error Calculator (Small Target)</h1>
         
         <div class="input-group">
             <p><strong>Formula Constants:</strong></p>
@@ -115,7 +115,8 @@
         <div id="videoContainer">
             <video id="cameraFeed" autoplay muted playsinline></video>
             <canvas id="videoCanvas"></canvas>
-            <div id="roiGuide"></div> </div>
+            <div id="roiGuide"></div> 
+        </div>
 
         <div class="result-output">
             <p><strong>Results:</strong></p>
@@ -129,11 +130,11 @@
     <script>
         // --- Configuration Constants ---
         const REAR_CAMERA_FACING_MODE = 'environment'; 
-        const BLINK_THRESHOLD = 120; // Adjust this if detection is poor
+        const BLINK_THRESHOLD = 120; // Try adjusting this higher (e.g., 150) if noise is an issue
         
-        // NEW: ROI Size (as a percentage of canvas width/height)
-        const ROI_WIDTH_PERCENT = 0.3; // 30% of canvas width
-        const ROI_HEIGHT_PERCENT = 0.3; // 30% of canvas height
+        // **CRITICAL CHANGE:** Small ROI Size (5% x 5%) to target the tiny dashboard light
+        const ROI_WIDTH_PERCENT = 0.05; 
+        const ROI_HEIGHT_PERCENT = 0.05; 
 
         // --- Global Variables ---
         let video, canvas, context, src;
@@ -141,9 +142,7 @@
         let lastBlinkTime = 0;
         let isProcessing = false;
         let cameraTimeSeconds = 0; 
-        
-        // NEW: OpenCV Mat for the ROI
-        let roiMat;
+        let roiMat; // OpenCV Mat for the ROI
 
         // --- OpenCV/Camera Functions ---
 
@@ -166,18 +165,18 @@
                         canvas.height = video.videoHeight;
                         src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
                         
-                        // NEW: Set ROI guide size after canvas dimensions are known
+                        // Set ROI guide size after canvas dimensions are known
                         const roiGuide = document.getElementById('roiGuide');
                         roiGuide.style.width = `${canvas.width * ROI_WIDTH_PERCENT}px`;
                         roiGuide.style.height = `${canvas.height * ROI_HEIGHT_PERCENT}px`;
 
-                        document.getElementById('status').innerText = 'Rear Camera Active. Place blinking light in the red box.';
+                        document.getElementById('status').innerText = 'Rear Camera Active. Place blinking light IN THE SMALL RED BOX.';
                         isProcessing = true;
                         requestAnimationFrame(processFrame);
                     };
                 })
                 .catch((err) => {
-                    document.getElementById('status').innerText = '❌ Rear Camera failed. Trying default camera...';
+                    document.getElementById('status').innerText = '❌ Camera failed. Trying default camera...';
                     navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
                         video.srcObject = stream;
                         video.onloadedmetadata = () => {
@@ -190,7 +189,7 @@
                             roiGuide.style.width = `${canvas.width * ROI_WIDTH_PERCENT}px`;
                             roiGuide.style.height = `${canvas.height * ROI_HEIGHT_PERCENT}px`;
 
-                            document.getElementById('status').innerText = 'Default Camera Active. Place blinking light in the red box.';
+                            document.getElementById('status').innerText = 'Default Camera Active. Place blinking light IN THE SMALL RED BOX.';
                             isProcessing = true;
                             requestAnimationFrame(processFrame);
                         };
@@ -220,30 +219,25 @@
             let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
             src.data.set(imageData.data);
 
-            // NEW: Define the Region of Interest
+            // 2. Define and Extract the Small Region of Interest (ROI)
             const roiWidth = Math.floor(canvas.width * ROI_WIDTH_PERCENT);
             const roiHeight = Math.floor(canvas.height * ROI_HEIGHT_PERCENT);
             const roiX = Math.floor((canvas.width - roiWidth) / 2);
             const roiY = Math.floor((canvas.height - roiHeight) / 2);
             
-            // Create an OpenCV Rect object for the ROI
             const rect = new cv.Rect(roiX, roiY, roiWidth, roiHeight);
-            
-            // Extract the ROI from the source image
-            roiMat = src.roi(rect); // roiMat now contains only the pixels from the rectangle
+            roiMat = src.roi(rect); 
 
-            // --- 2. Isolate Red Channel and Calculate Intensity within the ROI ---
+            // 3. Isolate Red Channel and Calculate Intensity within the ROI
             let channels = new cv.MatVector();
-            cv.split(roiMat, channels); // Split the ROI, not the whole frame
+            cv.split(roiMat, channels); 
             let redChannel = channels.get(0); 
-
             let avgRedIntensity = cv.mean(redChannel)[0]; 
 
             channels.delete(); 
-            // Also delete the roiMat to free memory after processing it
-            roiMat.delete(); // Important for memory management!
+            roiMat.delete(); // Free memory
             
-            // --- 3. Blink Timing Logic ---
+            // 4. Blink Timing Logic
             let currentState = avgRedIntensity > BLINK_THRESHOLD ? 1 : 0;
             
             if (currentState === 1 && lastState === 0) {
@@ -271,17 +265,21 @@
             const constant = parseFloat(document.getElementById('constant').value);
             const amps = parseFloat(document.getElementById('amps').value);
 
+            // 1. Validation
             if (isNaN(constant) || isNaN(amps) || constant === 0 || amps === 0 || cameraTimeSeconds === 0) {
                 document.getElementById('errorDisplay').textContent = "ERROR: Enter non-zero constants AND ensure the camera has measured at least one blink interval.";
                 document.getElementById('calculatedTimeDisplay').textContent = "Theoretical Time (Formula): -- seconds";
                 return;
             }
 
+            // 2. Theoretical Calculation
             const theoreticalTime = 13800 / (constant * amps); 
             const actualTime = cameraTimeSeconds; 
 
+            // 3. Error Calculation
             const errorPercentage = ((theoreticalTime - actualTime) / actualTime) * 100;
 
+            // 4. Display Results
             document.getElementById('calculatedTimeDisplay').innerHTML = 
                 `Theoretical Time (Formula): <span style="color: #0056b3;">${theoreticalTime.toFixed(3)} seconds</span>`;
 
