@@ -3,79 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Camera Blink Error Calculator (Cropped View)</title>
+<title>Camera Blink Error Calculator (Stable Log Version)</title>
 <style>
-    body { 
-        font-family: 'Segoe UI', sans-serif; 
-        text-align: center; 
-        background: #f4f4f9; 
-        padding: 20px;
-    }
+    body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
     h1 { color: #1a73e8; margin-bottom: 20px; }
     .container { max-width: 700px; margin: auto; }
-
-    /* --- Camera/Video Styles (Cropped Display) --- */
     #videoContainer {
-        margin: 20px auto;
-        border: 2px solid #ccc;
-        border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        display: inline-block;
-        background: #fff;
-        position: relative;
-        width: 320px; /* smaller cropped display */
-        height: 240px; /* smaller cropped display */
-        overflow: hidden; /* crop edges */
+        margin: 20px auto; border: 2px solid #ccc; border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: inline-block;
+        background: #fff; position: relative; width: 320px; height: 240px; overflow: hidden;
     }
     video, canvas {
-        position: absolute;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        object-fit: cover;
-        width: 150%; /* zoomed-in view */
-        height: 150%;
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%); object-fit: cover;
+        width: 150%; height: 150%;
     }
     #roiGuide {
-        position: absolute;
-        top: 50%; left: 50%;
+        position: absolute; top: 50%; left: 50%;
         transform: translate(-50%, -50%);
         border: 2px dashed rgba(255, 0, 0, 0.9);
         background: rgba(255, 0, 0, 0.1);
-        pointer-events: none;
-        z-index: 10;
+        pointer-events: none; z-index: 10;
     }
-
-    /* --- Input/Output --- */
     .input-group, .result-output {
-        margin-bottom: 20px;
-        padding: 15px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        background: #fff;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        text-align: left;
+        margin-bottom: 20px; padding: 15px; border: 1px solid #ddd;
+        border-radius: 8px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: left;
     }
     label { display: block; font-weight: 600; margin-bottom: 5px; }
-    input[type="number"] {
-        width: 100%; padding: 8px;
-        border: 1px solid #ccc; border-radius: 4px;
-        margin-bottom: 10px;
-    }
-    button {
-        padding: 10px 20px; border: none;
-        background: #0056b3; color: #fff;
-        border-radius: 6px; cursor: default;
-    }
-    #cameraTimeDisplay, #calculatedTimeDisplay {
-        font-size: 1.2em; font-weight: bold;
-    }
-    #errorDisplay {
-        font-size: 1.5em;
-        background: #ffe6e6;
-        padding: 10px;
-        border-radius: 6px;
-        color: #c00;
-    }
+    input[type="number"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
+    button { padding: 10px 20px; border: none; background: #0056b3; color: #fff; border-radius: 6px; cursor: default; }
+    #cameraTimeDisplay, #calculatedTimeDisplay { font-size: 1.2em; font-weight: bold; }
+    #errorDisplay { font-size: 1.5em; background: #eaf2ff; padding: 10px; border-radius: 6px; color: #003366; text-align: center; }
+    #stableLog { font-size: 1em; text-align: left; background: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; }
     #status { color: #666; }
 </style>
 
@@ -83,7 +42,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>🎯 Camera Blink Error Calculator (Cropped View)</h1>
+    <h1>🎯 Camera Blink Error Calculator (Stable Reading Log)</h1>
 
     <div class="input-group">
         <label>Constant (C):</label>
@@ -104,7 +63,13 @@
         <div id="cameraTimeDisplay">Camera Time (Actual): --</div>
         <div id="calculatedTimeDisplay">Theoretical Time (Formula): --</div>
         <button>PENGIRAAN RALAT ADALAH AUTOMATIK</button>
-        <div id="errorDisplay">Error Percentage: --%</div>
+        
+        <!-- Bacaan semasa -->
+        <div id="errorDisplay">Error: --%</div>
+        
+        <!-- Log bacaan stabil -->
+        <h3>📘 Stable Error Log</h3>
+        <div id="stableLog">Tiada bacaan stabil direkodkan lagi.</div>
     </div>
 </div>
 
@@ -112,10 +77,14 @@
 const REAR_CAMERA_FACING_MODE = 'environment';
 const BLINK_THRESHOLD = 120;
 const ROI_WIDTH_PERCENT = 0.05, ROI_HEIGHT_PERCENT = 0.05;
+const MAX_READINGS = 3;
+const ALLOWED_VARIANCE = 10;
 
 let video, canvas, context, src;
 let lastState = 0, lastBlinkTime = 0;
 let isProcessing = false, cameraTimeSeconds = 0;
+let errorReadings = [];
+let lastStableError = null;
 
 function onOpenCvReady() {
     document.getElementById('status').innerText = 'OpenCV Ready. Requesting camera...';
@@ -170,7 +139,7 @@ function processFrame() {
 
     let channels = new cv.MatVector();
     cv.split(roiMat, channels);
-    let redChannel = channels.get(2); // fixed red channel
+    let redChannel = channels.get(2);
     let avgRed = cv.mean(redChannel)[0];
     channels.delete(); roiMat.delete();
 
@@ -192,13 +161,44 @@ function runCalculationIfReady() {
     const C = parseFloat(document.getElementById('constant').value);
     const I = parseFloat(document.getElementById('amps').value);
     if (isNaN(C) || isNaN(I) || C === 0 || I === 0 || cameraTimeSeconds === 0) return;
+
     const theoretical = 17647 / (C * I);
     const actual = cameraTimeSeconds;
     const error = ((theoretical - actual) / actual) * 100;
+
+    errorReadings.push(error);
+
+    if (errorReadings.length === MAX_READINGS) {
+        const maxError = Math.max(...errorReadings);
+        const minError = Math.min(...errorReadings);
+        const diff = Math.abs(maxError - minError);
+
+        if (diff <= ALLOWED_VARIANCE) {
+            const avgError = errorReadings.reduce((a, b) => a + b, 0) / errorReadings.length;
+            lastStableError = avgError;
+            addStableToLog(avgError);
+            document.getElementById('errorDisplay').innerHTML =
+                `✅ Stable Average Error: <span style="color:${Math.abs(avgError)<5?'darkgreen':'red'};">${avgError.toFixed(2)}%</span>`;
+        } else if (lastStableError !== null) {
+            document.getElementById('errorDisplay').innerHTML =
+                `⚠️ Unstable — Showing Last Stable: <span style="color:${Math.abs(lastStableError)<5?'darkgreen':'red'};">${lastStableError.toFixed(2)}%</span>`;
+        }
+        errorReadings = [];
+    } else {
+        document.getElementById('errorDisplay').innerHTML =
+            `Error ${errorReadings.length}/3: <span style="color:${Math.abs(error)<5?'darkgreen':'red'};">${error.toFixed(2)}%</span>`;
+    }
+
     document.getElementById('calculatedTimeDisplay').innerHTML =
         `Theoretical Time (Formula): <span style="color:#0056b3;">${theoretical.toFixed(3)} s</span>`;
-    document.getElementById('errorDisplay').innerHTML =
-        `Error Percentage: <span style="color:${Math.abs(error)<5?'darkgreen':'red'};">${error.toFixed(2)}%</span>`;
+}
+
+function addStableToLog(value) {
+    const log = document.getElementById('stableLog');
+    if (log.innerText.includes('Tiada bacaan stabil')) log.innerHTML = '';
+    const entry = document.createElement('div');
+    entry.innerHTML = `✅ Stable Error: <span style="color:${Math.abs(value)<5?'darkgreen':'red'};">${value.toFixed(2)}%</span>`;
+    log.prepend(entry);
 }
 </script>
 </body>
