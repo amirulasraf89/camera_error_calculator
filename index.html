@@ -1,297 +1,205 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera-Based Blink Error Calculator (Automatic ROI)</title>
-    
-    <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; 
-            background-color: #f4f4f9;
-            padding: 20px;
-        }
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: #1a73e8;
-            margin-bottom: 20px;
-        }
-        /* --- Camera/Video Styles --- */
-        #videoContainer {
-            margin: 20px auto;
-            border: 2px solid #ccc;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            display: inline-block;
-            background-color: #fff;
-            position: relative; /* Essential for positioning the ROI guide */
-        }
-        video { display: none; }
-        canvas { 
-            display: block; 
-            max-width: 100%; 
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camera Blink Error Calculator (Cropped View)</title>
+<style>
+    body { 
+        font-family: 'Segoe UI', sans-serif; 
+        text-align: center; 
+        background: #f4f4f9; 
+        padding: 20px;
+    }
+    h1 { color: #1a73e8; margin-bottom: 20px; }
+    .container { max-width: 700px; margin: auto; }
 
-        /* --- ROI Guide --- */
-        #roiGuide {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%); /* Centers the div */
-            border: 2px dashed rgba(255, 0, 0, 0.9); /* Clear Red dashed border */
-            background-color: rgba(255, 0, 0, 0.1); /* Light red overlay */
-            pointer-events: none; 
-            z-index: 10; 
-            box-sizing: border-box; 
-        }
+    /* --- Camera/Video Styles (Cropped Display) --- */
+    #videoContainer {
+        margin: 20px auto;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        display: inline-block;
+        background: #fff;
+        position: relative;
+        width: 320px; /* smaller cropped display */
+        height: 240px; /* smaller cropped display */
+        overflow: hidden; /* crop edges */
+    }
+    video, canvas {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        object-fit: cover;
+        width: 150%; /* zoomed-in view */
+        height: 150%;
+    }
+    #roiGuide {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        border: 2px dashed rgba(255, 0, 0, 0.9);
+        background: rgba(255, 0, 0, 0.1);
+        pointer-events: none;
+        z-index: 10;
+    }
 
-        /* --- Input/Result Styles --- */
-        .input-group, .result-output {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            text-align: left;
-        }
-        label { display: block; margin-bottom: 5px; font-weight: 600; color: #333; }
-        input[type="number"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            padding: 10px 20px;
-            margin: 5px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: default; /* Change cursor since it's now automatic */
-            background-color: #0056b3; /* Slightly different color to indicate automation */
-            color: white; 
-            transition: background-color 0.3s ease;
-        }
-        button:hover { opacity: 0.9; }
+    /* --- Input/Output --- */
+    .input-group, .result-output {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        text-align: left;
+    }
+    label { display: block; font-weight: 600; margin-bottom: 5px; }
+    input[type="number"] {
+        width: 100%; padding: 8px;
+        border: 1px solid #ccc; border-radius: 4px;
+        margin-bottom: 10px;
+    }
+    button {
+        padding: 10px 20px; border: none;
+        background: #0056b3; color: #fff;
+        border-radius: 6px; cursor: default;
+    }
+    #cameraTimeDisplay, #calculatedTimeDisplay {
+        font-size: 1.2em; font-weight: bold;
+    }
+    #errorDisplay {
+        font-size: 1.5em;
+        background: #ffe6e6;
+        padding: 10px;
+        border-radius: 6px;
+        color: #c00;
+    }
+    #status { color: #666; }
+</style>
 
-        #cameraTimeDisplay, #calculatedTimeDisplay {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        #errorDisplay {
-            font-size: 1.8em;
-            color: #cc0000;
-            background-color: #ffe6e6;
-            padding: 10px;
-            border-radius: 6px;
-        }
-        #status { color: #666; margin-bottom: 20px; }
-    </style>
-    
-    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
+<script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>🎯 Camera Blink Error Calculator (Pengiraan Automatik)</h1>
-        
-        <div class="input-group">
-            <p><strong>Formula Constants:</strong></p>
-            <label for="constant">Constant Value (C):</label>
-            <input type="number" id="constant" value="0.0001" step="any" placeholder="Enter Constant Value (e.g., 0.0001)">
+<div class="container">
+    <h1>🎯 Camera Blink Error Calculator (Cropped View)</h1>
 
-            <label for="amps">Current (Amps):</label>
-            <input type="number" id="amps" value="10.0" step="any" placeholder="Enter Current in Amps (e.g., 10.0)">
-        </div>
-        
-        <p id="status">Waiting for OpenCV.js and camera access...</p>
-        <div id="videoContainer">
-            <video id="cameraFeed" autoplay muted playsinline></video>
-            <canvas id="videoCanvas"></canvas>
-            <div id="roiGuide"></div> 
-        </div>
-
-        <div class="result-output">
-            <p><strong>Results:</strong></p>
-            <div id="cameraTimeDisplay">Camera Time (Actual): -- seconds</div>
-            <div id="calculatedTimeDisplay">Theoretical Time (Formula): -- seconds</div>
-            <button>PENGIRAAN RALAT ADALAH AUTOMATIK</button>
-            <div id="errorDisplay">Error Percentage: --%</div>
-        </div>
+    <div class="input-group">
+        <label>Constant (C):</label>
+        <input type="number" id="constant" value="1000" step="any">
+        <label>Current (Amps):</label>
+        <input type="number" id="amps" value="1.0" step="any">
     </div>
 
-    <script>
-        // --- Configuration Constants ---
-        const REAR_CAMERA_FACING_MODE = 'environment'; 
-        const BLINK_THRESHOLD = 120; 
-        
-        // **CRITICAL:** Small ROI Size (5% x 5%)
-        const ROI_WIDTH_PERCENT = 0.05; 
-        const ROI_HEIGHT_PERCENT = 0.05; 
+    <p id="status">Waiting for OpenCV.js and camera access...</p>
 
-        // --- Global Variables ---
-        let video, canvas, context, src;
-        let lastState = 0; 
-        let lastBlinkTime = 0;
-        let isProcessing = false;
-        let cameraTimeSeconds = 0; 
-        let roiMat; // OpenCV Mat for the ROI
+    <div id="videoContainer">
+        <video id="cameraFeed" autoplay muted playsinline></video>
+        <canvas id="videoCanvas"></canvas>
+        <div id="roiGuide"></div>
+    </div>
 
-        // --- OpenCV/Camera Functions ---
+    <div class="result-output">
+        <div id="cameraTimeDisplay">Camera Time (Actual): --</div>
+        <div id="calculatedTimeDisplay">Theoretical Time (Formula): --</div>
+        <button>PENGIRAAN RALAT ADALAH AUTOMATIK</button>
+        <div id="errorDisplay">Error Percentage: --%</div>
+    </div>
+</div>
 
-        function onOpenCvReady() {
-            document.getElementById('status').innerText = 'OpenCV Ready. Requesting rear camera...';
-            video = document.getElementById('cameraFeed');
-            canvas = document.getElementById('videoCanvas');
-            context = canvas.getContext('2d', { willReadFrequently: true });
-            startCamera();
-        }
+<script>
+const REAR_CAMERA_FACING_MODE = 'environment';
+const BLINK_THRESHOLD = 120;
+const ROI_WIDTH_PERCENT = 0.05, ROI_HEIGHT_PERCENT = 0.05;
 
-        function startCamera() {
-            const constraints = { video: { facingMode: REAR_CAMERA_FACING_MODE } };
-            navigator.mediaDevices.getUserMedia(constraints)
-                .then((stream) => {
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-                        
-                        // Set ROI guide size after canvas dimensions are known
-                        const roiGuide = document.getElementById('roiGuide');
-                        roiGuide.style.width = `${canvas.width * ROI_WIDTH_PERCENT}px`;
-                        roiGuide.style.height = `${canvas.height * ROI_HEIGHT_PERCENT}px`;
+let video, canvas, context, src;
+let lastState = 0, lastBlinkTime = 0;
+let isProcessing = false, cameraTimeSeconds = 0;
 
-                        document.getElementById('status').innerText = 'Rear Camera Active. Place blinking light IN THE SMALL RED BOX.';
-                        isProcessing = true;
-                        requestAnimationFrame(processFrame);
-                    };
-                })
-                .catch((err) => {
-                    document.getElementById('status').innerText = '❌ Camera failed. Trying default camera...';
-                    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
-                        video.srcObject = stream;
-                        video.onloadedmetadata = () => {
-                            video.play();
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
-                            src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+function onOpenCvReady() {
+    document.getElementById('status').innerText = 'OpenCV Ready. Requesting camera...';
+    video = document.getElementById('cameraFeed');
+    canvas = document.getElementById('videoCanvas');
+    context = canvas.getContext('2d', { willReadFrequently: true });
+    startCamera();
+}
 
-                            const roiGuide = document.getElementById('roiGuide');
-                            roiGuide.style.width = `${canvas.width * ROI_WIDTH_PERCENT}px`;
-                            roiGuide.style.height = `${canvas.height * ROI_HEIGHT_PERCENT}px`;
-
-                            document.getElementById('status').innerText = 'Default Camera Active. Place blinking light IN THE SMALL RED BOX.';
-                            isProcessing = true;
-                            requestAnimationFrame(processFrame);
-                        };
-                    }).catch((e) => {
-                        document.getElementById('status').innerText = '❌ Camera Error: ' + e.name + '. Cannot start video feed.';
-                        console.error("Camera access failed:", e);
-                    });
-                });
-        }
-        
-        function updateCameraDisplay(timeDiff) {
-            if (timeDiff > 0) {
-                cameraTimeSeconds = timeDiff; 
-                document.getElementById('cameraTimeDisplay').innerHTML = 
-                    `Camera Time (Actual): <span style="color: darkgreen;">${timeDiff.toFixed(3)} seconds</span>`;
-            } else {
-                document.getElementById('cameraTimeDisplay').innerHTML = 
-                    `Camera Time (Actual): <span style="color: gray;">-- seconds</span>`;
-            }
-        }
-
-        function processFrame() {
-            if (!isProcessing) return;
-
-            // 1. Capture the frame onto the canvas
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            src.data.set(imageData.data);
-
-            // 2. Define and Extract the Small Region of Interest (ROI)
-            const roiWidth = Math.floor(canvas.width * ROI_WIDTH_PERCENT);
-            const roiHeight = Math.floor(canvas.height * ROI_HEIGHT_PERCENT);
-            const roiX = Math.floor((canvas.width - roiWidth) / 2);
-            const roiY = Math.floor((canvas.height - roiHeight) / 2);
-            
-            const rect = new cv.Rect(roiX, roiY, roiWidth, roiHeight);
-            roiMat = src.roi(rect); 
-
-            // 3. Isolate Red Channel and Calculate Intensity within the ROI
-            let channels = new cv.MatVector();
-            cv.split(roiMat, channels); 
-            let redChannel = channels.get(0); 
-            let avgRedIntensity = cv.mean(redChannel)[0]; 
-
-            channels.delete(); 
-            roiMat.delete(); // Free memory
-            
-            // 4. Blink Timing Logic
-            let currentState = avgRedIntensity > BLINK_THRESHOLD ? 1 : 0;
-            
-            if (currentState === 1 && lastState === 0) {
-                const now = performance.now(); 
-                
-                if (lastBlinkTime > 0) {
-                    let timeDifference = (now - lastBlinkTime) / 1000;
-                    document.getElementById('status').innerText = `Blink detected! Time diff: ${timeDifference.toFixed(3)}s`;
-                    updateCameraDisplay(timeDifference); 
-                    
-                    // ⚡️ TRIGGER AUTOMATIC CALCULATION HERE ⚡️
-                    runCalculationIfReady(); 
-
-                } else {
-                    document.getElementById('status').innerText = 'First blink detected. Waiting for the next one...';
-                }
-                
-                lastBlinkTime = now;
-            } 
-            
-            lastState = currentState;
-
+function startCamera() {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: REAR_CAMERA_FACING_MODE } })
+    .then(stream => {
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+            video.play();
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+            const roiGuide = document.getElementById('roiGuide');
+            roiGuide.style.width = `${canvas.width * ROI_WIDTH_PERCENT}px`;
+            roiGuide.style.height = `${canvas.height * ROI_HEIGHT_PERCENT}px`;
+            document.getElementById('status').innerText = 'Camera Active. Center blinking light inside the box.';
+            isProcessing = true;
             requestAnimationFrame(processFrame);
+        };
+    })
+    .catch(err => {
+        document.getElementById('status').innerText = '❌ Camera error: ' + err.name;
+    });
+}
+
+function updateCameraDisplay(timeDiff) {
+    if (timeDiff > 0) {
+        cameraTimeSeconds = timeDiff;
+        document.getElementById('cameraTimeDisplay').innerHTML =
+            `Camera Time (Actual): <span style="color: darkgreen;">${timeDiff.toFixed(3)} s</span>`;
+    }
+}
+
+function processFrame() {
+    if (!isProcessing) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    src.data.set(imageData.data);
+
+    const roiW = Math.floor(canvas.width * ROI_WIDTH_PERCENT);
+    const roiH = Math.floor(canvas.height * ROI_HEIGHT_PERCENT);
+    const roiX = Math.floor((canvas.width - roiW) / 2);
+    const roiY = Math.floor((canvas.height - roiH) / 2);
+    const rect = new cv.Rect(roiX, roiY, roiW, roiH);
+    let roiMat = src.roi(rect);
+
+    let channels = new cv.MatVector();
+    cv.split(roiMat, channels);
+    let redChannel = channels.get(2); // fixed red channel
+    let avgRed = cv.mean(redChannel)[0];
+    channels.delete(); roiMat.delete();
+
+    let currentState = avgRed > BLINK_THRESHOLD ? 1 : 0;
+    if (currentState === 1 && lastState === 0) {
+        const now = performance.now();
+        if (lastBlinkTime > 0) {
+            let diff = (now - lastBlinkTime) / 1000;
+            updateCameraDisplay(diff);
+            runCalculationIfReady();
         }
+        lastBlinkTime = now;
+    }
+    lastState = currentState;
+    requestAnimationFrame(processFrame);
+}
 
-        // --- NEW: Error Calculation Function (Automatic) ---
-
-        function runCalculationIfReady() {
-            const constant = parseFloat(document.getElementById('constant').value);
-            const amps = parseFloat(document.getElementById('amps').value);
-
-            // 1. Validation
-            if (isNaN(constant) || isNaN(amps) || constant === 0 || amps === 0 || cameraTimeSeconds === 0) {
-                document.getElementById('errorDisplay').textContent = "Error Percentage: --%";
-                document.getElementById('calculatedTimeDisplay').textContent = "Theoretical Time (Formula): -- seconds";
-                return;
-            }
-
-            // 2. Theoretical Calculation
-            const theoreticalTime = 13800 / (constant * amps); 
-            const actualTime = cameraTimeSeconds; 
-
-            // 3. Error Calculation
-            const errorPercentage = ((theoreticalTime - actualTime) / actualTime) * 100;
-
-            // 4. Display Results
-            document.getElementById('calculatedTimeDisplay').innerHTML = 
-                `Theoretical Time (Formula): <span style="color: #0056b3;">${theoreticalTime.toFixed(3)} seconds</span>`;
-
-            document.getElementById('errorDisplay').innerHTML = 
-                `Error Percentage: <span style="color: ${Math.abs(errorPercentage) < 5 ? 'darkgreen' : 'red'};">${errorPercentage.toFixed(2)}%</span>`;
-            
-            document.getElementById('status').innerText = 'Blink detected and Error Calculated Automatically.';
-        }
-    </script>
+function runCalculationIfReady() {
+    const C = parseFloat(document.getElementById('constant').value);
+    const I = parseFloat(document.getElementById('amps').value);
+    if (isNaN(C) || isNaN(I) || C === 0 || I === 0 || cameraTimeSeconds === 0) return;
+    const theoretical = 17647 / (C * I);
+    const actual = cameraTimeSeconds;
+    const error = ((theoretical - actual) / actual) * 100;
+    document.getElementById('calculatedTimeDisplay').innerHTML =
+        `Theoretical Time (Formula): <span style="color:#0056b3;">${theoretical.toFixed(3)} s</span>`;
+    document.getElementById('errorDisplay').innerHTML =
+        `Error Percentage: <span style="color:${Math.abs(error)<5?'darkgreen':'red'};">${error.toFixed(2)}%</span>`;
+}
+</script>
 </body>
 </html>
