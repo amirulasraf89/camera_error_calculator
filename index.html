@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera-Based Blink Error Calculator (Targeted ROI)</title>
+    <title>Camera-Based Blink Error Calculator (Automatic ROI)</title>
     
     <style>
         body { 
@@ -74,8 +74,8 @@
             border: none;
             border-radius: 6px;
             font-size: 16px;
-            cursor: pointer;
-            background-color: #1a73e8; 
+            cursor: default; /* Change cursor since it's now automatic */
+            background-color: #0056b3; /* Slightly different color to indicate automation */
             color: white; 
             transition: background-color 0.3s ease;
         }
@@ -100,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎯 Camera Blink Error Calculator (Small Target)</h1>
+        <h1>🎯 Camera Blink Error Calculator (Pengiraan Automatik)</h1>
         
         <div class="input-group">
             <p><strong>Formula Constants:</strong></p>
@@ -122,7 +122,7 @@
             <p><strong>Results:</strong></p>
             <div id="cameraTimeDisplay">Camera Time (Actual): -- seconds</div>
             <div id="calculatedTimeDisplay">Theoretical Time (Formula): -- seconds</div>
-            <button onclick="calculateError()">CALCULATE ERROR</button>
+            <button>PENGIRAAN RALAT ADALAH AUTOMATIK</button>
             <div id="errorDisplay">Error Percentage: --%</div>
         </div>
     </div>
@@ -130,9 +130,9 @@
     <script>
         // --- Configuration Constants ---
         const REAR_CAMERA_FACING_MODE = 'environment'; 
-        const BLINK_THRESHOLD = 120; // Try adjusting this higher (e.g., 150) if noise is an issue
+        const BLINK_THRESHOLD = 120; 
         
-        // **CRITICAL CHANGE:** Small ROI Size (5% x 5%) to target the tiny dashboard light
+        // **CRITICAL:** Small ROI Size (5% x 5%)
         const ROI_WIDTH_PERCENT = 0.05; 
         const ROI_HEIGHT_PERCENT = 0.05; 
 
@@ -247,6 +247,10 @@
                     let timeDifference = (now - lastBlinkTime) / 1000;
                     document.getElementById('status').innerText = `Blink detected! Time diff: ${timeDifference.toFixed(3)}s`;
                     updateCameraDisplay(timeDifference); 
+                    
+                    // ⚡️ TRIGGER AUTOMATIC CALCULATION HERE ⚡️
+                    runCalculationIfReady(); 
+
                 } else {
                     document.getElementById('status').innerText = 'First blink detected. Waiting for the next one...';
                 }
@@ -259,15 +263,15 @@
             requestAnimationFrame(processFrame);
         }
 
-        // --- Error Calculation Function ---
+        // --- NEW: Error Calculation Function (Automatic) ---
 
-        function calculateError() {
+        function runCalculationIfReady() {
             const constant = parseFloat(document.getElementById('constant').value);
             const amps = parseFloat(document.getElementById('amps').value);
 
             // 1. Validation
             if (isNaN(constant) || isNaN(amps) || constant === 0 || amps === 0 || cameraTimeSeconds === 0) {
-                document.getElementById('errorDisplay').textContent = "ERROR: Enter non-zero constants AND ensure the camera has measured at least one blink interval.";
+                document.getElementById('errorDisplay').textContent = "Error Percentage: --%";
                 document.getElementById('calculatedTimeDisplay').textContent = "Theoretical Time (Formula): -- seconds";
                 return;
             }
@@ -286,7 +290,7 @@
             document.getElementById('errorDisplay').innerHTML = 
                 `Error Percentage: <span style="color: ${Math.abs(errorPercentage) < 5 ? 'darkgreen' : 'red'};">${errorPercentage.toFixed(2)}%</span>`;
             
-            document.getElementById('status').innerText = 'Calculation Complete.';
+            document.getElementById('status').innerText = 'Blink detected and Error Calculated Automatically.';
         }
     </script>
 </body>
