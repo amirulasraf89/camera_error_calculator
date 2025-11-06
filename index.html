@@ -186,7 +186,7 @@ function runCalculationIfReady() {
         errorReadings = [];
     } else {
         document.getElementById('errorDisplay').innerHTML =
-            `Error ${errorReadings.length}/3: <span style="color:${Math.abs(error)<5?'darkgreen':'red'};">${error.toFixed(2)}%</span>`;
+            `Error ${errorReadings.length}/2: <span style="color:${Math.abs(error)<5?'darkgreen':'red'};">${error.toFixed(2)}%</span>`;
     }
 
     document.getElementById('calculatedTimeDisplay').innerHTML =
