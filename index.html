@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Camera Blink Error Calculator (Stable Log Version)</title>
+<title>Camera Blink Error Calculator (Stable Log + Power Factor)</title>
 <style>
     body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
     h1 { color: #1a73e8; margin-bottom: 20px; }
@@ -27,14 +27,25 @@
     }
     .input-group, .result-output {
         margin-bottom: 20px; padding: 15px; border: 1px solid #ddd;
-        border-radius: 8px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: left;
+        border-radius: 8px; background: #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: left;
     }
     label { display: block; font-weight: 600; margin-bottom: 5px; }
-    input[type="number"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
+    input[type="number"] {
+        width: 100%; padding: 8px; border: 1px solid #ccc;
+        border-radius: 4px; margin-bottom: 10px;
+    }
     button { padding: 10px 20px; border: none; background: #0056b3; color: #fff; border-radius: 6px; cursor: default; }
     #cameraTimeDisplay, #calculatedTimeDisplay { font-size: 1.2em; font-weight: bold; }
-    #errorDisplay { font-size: 1.5em; background: #eaf2ff; padding: 10px; border-radius: 6px; color: #003366; text-align: center; }
-    #stableLog { font-size: 1em; text-align: left; background: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 6px; max-height: 200px; overflow-y: auto; }
+    #errorDisplay {
+        font-size: 1.5em; background: #eaf2ff; padding: 10px;
+        border-radius: 6px; color: #003366; text-align: center;
+    }
+    #stableLog {
+        font-size: 1em; text-align: left; background: #fff;
+        padding: 10px; border: 1px solid #ccc; border-radius: 6px;
+        max-height: 200px; overflow-y: auto;
+    }
     #status { color: #666; }
 </style>
 
@@ -42,13 +53,17 @@
 </head>
 <body>
 <div class="container">
-    <h1>🎯 Camera Blink Error Calculator (Stable Reading Log)</h1>
+    <h1>🎯 Camera Blink Error Calculator (Stable Reading Log + Power Factor)</h1>
 
     <div class="input-group">
         <label>Constant (C):</label>
         <input type="number" id="constant" value="1000" step="any">
+
         <label>Current (Amps):</label>
         <input type="number" id="amps" value="1.0" step="any">
+
+        <label>Power Factor (p.f):</label>
+        <input type="number" id="pf" value="0.8" step="any">
     </div>
 
     <p id="status">Waiting for OpenCV.js and camera access...</p>
@@ -160,9 +175,12 @@ function processFrame() {
 function runCalculationIfReady() {
     const C = parseFloat(document.getElementById('constant').value);
     const I = parseFloat(document.getElementById('amps').value);
-    if (isNaN(C) || isNaN(I) || C === 0 || I === 0 || cameraTimeSeconds === 0) return;
+    const PF = parseFloat(document.getElementById('pf').value);
 
-    const theoretical = 17647 / (C * I);
+    if (isNaN(C) || isNaN(I) || isNaN(PF) || C === 0 || I === 0 || PF === 0 || cameraTimeSeconds === 0) return;
+
+    // ✅ Corrected formula:
+    const theoretical = 15000 / (PF * C * I);
     const actual = cameraTimeSeconds;
     const error = ((theoretical - actual) / actual) * 100;
 
