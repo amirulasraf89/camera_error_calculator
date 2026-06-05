@@ -46,6 +46,15 @@ The app offers two measurement modes — a **manual stopwatch** and an **AI-powe
 
 ## 🖥️ App Screens
 
+<div align="center">
+
+| Manual Mode | Camera Mode |
+|:-----------:|:-----------:|
+| ![Manual Mode](docs/meter-screenshot_1.png) | ![Camera Mode](docs/meter-screenshot_2.png) |
+| Enter Power Factor, Meter Constant & Current — then time the LED blinks manually | Point camera at pulse LED — auto-detects blinks with pixel brightness analysis |
+
+</div>
+
 ### Manual Mode
 Enter voltage, meter constant, and current — then time the LED blinks manually. The app calculates the theoretical time and error percentage instantly.
 
