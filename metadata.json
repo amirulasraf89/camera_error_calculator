@@ -1,0 +1,5 @@
+{
+  "name": "Blink Error Calculator",
+  "description": "A camera-based tool to calculate the error percentage between theoretical and actual blink intervals.",
+  "requestFramePermissions": ["camera"]
+}
